@@ -216,7 +216,7 @@ fn interactive_model_selection() -> Result<String, Box<dyn std::error::Error>> {
                             "\n  \x1b[1;32m✓\x1b[0m Selected: \x1b[1m{}\x1b[0m (Ollama)\n",
                             model_name
                         );
-                        return Ok(model_name.clone());
+                        return Ok(format!("ollama/{}", model_name));
                     }
                     cloud_provider => {
                         let env_var_name = match cloud_provider {
