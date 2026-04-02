@@ -218,6 +218,16 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
 pub fn resolve_model_alias(model: &str) -> String {
     let trimmed = model.trim();
     let lower = trimmed.to_ascii_lowercase();
+
+    // Always strip ollama prefixes first, regardless of registry
+    let clean_model = if let Some(stripped) = trimmed.strip_prefix("ollama/") {
+        stripped
+    } else if let Some(stripped) = trimmed.strip_prefix("ollama:") {
+        stripped
+    } else {
+        trimmed
+    };
+
     MODEL_REGISTRY
         .iter()
         .find_map(|(alias, metadata)| {
@@ -226,31 +236,23 @@ pub fn resolve_model_alias(model: &str) -> String {
                     "opus" => "claude-opus-4-6",
                     "sonnet" => "claude-sonnet-4-6",
                     "haiku" => "claude-haiku-4-5-20251213",
-                    _ => trimmed,
+                    _ => clean_model,
                 },
                 ProviderKind::Xai => match *alias {
                     "grok" | "grok-3" => "grok-3",
                     "grok-mini" | "grok-3-mini" => "grok-3-mini",
                     "grok-2" => "grok-2",
-                    _ => trimmed,
+                    _ => clean_model,
                 },
                 ProviderKind::Gemini => match *alias {
                     "gemini" => "gemini-2.5-flash",
-                    _ => trimmed,
+                    _ => clean_model,
                 },
-                ProviderKind::Ollama => {
-                    if let Some(stripped) = trimmed.strip_prefix("ollama/") {
-                        stripped
-                    } else if let Some(stripped) = trimmed.strip_prefix("ollama:") {
-                        stripped
-                    } else {
-                        trimmed
-                    }
-                }
-                ProviderKind::OpenAi => trimmed,
+                ProviderKind::Ollama => clean_model,
+                ProviderKind::OpenAi => clean_model,
             })
         })
-        .map_or_else(|| trimmed.to_string(), ToOwned::to_owned)
+        .map_or_else(|| clean_model.to_string(), ToOwned::to_owned)
 }
 
 #[must_use]

@@ -112,8 +112,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let final_model = if model_explicitly_set {
                 model
             } else {
-                let selected = interactive_model_selection()?;
-                api::resolve_model_alias(&selected).to_string()
+                interactive_model_selection()?
             };
             run_repl(final_model, allowed_tools, permission_mode)?;
         }
