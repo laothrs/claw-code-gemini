@@ -1,0 +1,1 @@
+{"messages":[{"blocks":[{"text":"Merhaba, 2+2 kaç eder?","type":"text"}],"role":"user"},{"blocks":[{"text":"2+2 dört eder.","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}}],"version":1}
