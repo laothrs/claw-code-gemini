@@ -238,7 +238,16 @@ pub fn resolve_model_alias(model: &str) -> String {
                     "gemini" => "gemini-2.5-flash",
                     _ => trimmed,
                 },
-                ProviderKind::Ollama | ProviderKind::OpenAi => trimmed,
+                ProviderKind::Ollama => {
+                    if let Some(stripped) = trimmed.strip_prefix("ollama/") {
+                        stripped
+                    } else if let Some(stripped) = trimmed.strip_prefix("ollama:") {
+                        stripped
+                    } else {
+                        trimmed
+                    }
+                }
+                ProviderKind::OpenAi => trimmed,
             })
         })
         .map_or_else(|| trimmed.to_string(), ToOwned::to_owned)
@@ -267,7 +276,7 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             default_base_url: openai_compat::DEFAULT_GEMINI_BASE_URL,
         });
     }
-    if lower.contains("llama") || lower.contains("codestral") {
+    if lower.contains("llama") || lower.contains("codestral") || lower.contains("gpt-oss") || lower.starts_with("ollama/") || lower.starts_with("ollama:") {
         return Some(ProviderMetadata {
             provider: ProviderKind::Ollama,
             auth_env: "OLLAMA_API_KEY",
