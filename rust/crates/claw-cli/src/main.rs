@@ -107,10 +107,160 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             model,
             allowed_tools,
             permission_mode,
-        } => run_repl(model, allowed_tools, permission_mode)?,
+            model_explicitly_set,
+        } => {
+            let final_model = if model_explicitly_set {
+                model
+            } else {
+                interactive_model_selection()?
+            };
+            run_repl(final_model, allowed_tools, permission_mode)?;
+        }
         CliAction::Help => print_help(),
     }
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct OllamaModel {
+    name: String,
+    size: String,
+}
+
+fn query_ollama_models() -> Vec<OllamaModel> {
+    let output = match Command::new("ollama").arg("list").output() {
+        Ok(output) => output,
+        Err(_) => return Vec::new(),
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut models = Vec::new();
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            let name = parts[0].to_string();
+            // Size is typically at index 2-3 (e.g., "13 GB")
+            let size = if parts.len() >= 4 {
+                format!("{} {}", parts[2], parts[3])
+            } else {
+                parts[2].to_string()
+            };
+            models.push(OllamaModel { name, size });
+        }
+    }
+    models
+}
+
+fn interactive_model_selection() -> Result<String, Box<dyn std::error::Error>> {
+    let ollama_models = query_ollama_models();
+
+    println!();
+    println!("╭──────────────────────────────────────────╮");
+    println!("│         Claw Code - Model Selection      │");
+    println!("╰──────────────────────────────────────────╯");
+    println!();
+
+    let mut options: Vec<(String, &str)> = Vec::new(); // (model_name, provider_type)
+
+    if !ollama_models.is_empty() {
+        println!("  \x1b[1;36mLocal Models (Ollama):\x1b[0m");
+        for (i, model) in ollama_models.iter().enumerate() {
+            let num = i + 1;
+            println!("    \x1b[1;32m[{num}]\x1b[0m {} \x1b[2m({})\x1b[0m", model.name, model.size);
+            options.push((model.name.clone(), "ollama"));
+        }
+        println!();
+    } else {
+        println!("  \x1b[2mNo local Ollama models found.\x1b[0m");
+        println!("  \x1b[2mInstall Ollama and run 'ollama pull <model>' to add local models.\x1b[0m");
+        println!();
+    }
+
+    println!("  \x1b[1;35mCloud Providers:\x1b[0m");
+    let base = options.len();
+    println!(
+        "    \x1b[1;33m[{}]\x1b[0m Gemini \x1b[2m(requires API key)\x1b[0m",
+        base + 1
+    );
+    options.push(("gemini-2.5-flash".to_string(), "gemini"));
+    println!(
+        "    \x1b[1;33m[{}]\x1b[0m Anthropic Claude \x1b[2m(requires API key)\x1b[0m",
+        base + 2
+    );
+    options.push(("claude-sonnet-4-6".to_string(), "anthropic"));
+    println!(
+        "    \x1b[1;33m[{}]\x1b[0m OpenAI \x1b[2m(requires API key)\x1b[0m",
+        base + 3
+    );
+    options.push(("gpt-4o".to_string(), "openai"));
+    println!();
+
+    // Read choice
+    loop {
+        print!("  Enter your choice (1-{}): ", options.len());
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let trimmed = input.trim();
+
+        if let Ok(choice) = trimmed.parse::<usize>() {
+            if choice >= 1 && choice <= options.len() {
+                let (model_name, provider_type) = &options[choice - 1];
+
+                match *provider_type {
+                    "ollama" => {
+                        println!(
+                            "\n  \x1b[1;32m✓\x1b[0m Selected: \x1b[1m{}\x1b[0m (Ollama)\n",
+                            model_name
+                        );
+                        return Ok(model_name.clone());
+                    }
+                    cloud_provider => {
+                        let env_var_name = match cloud_provider {
+                            "gemini" => "GEMINI_API_KEY",
+                            "anthropic" => "ANTHROPIC_API_KEY",
+                            "openai" => "OPENAI_API_KEY",
+                            _ => unreachable!(),
+                        };
+                        let provider_label = match cloud_provider {
+                            "gemini" => "Gemini",
+                            "anthropic" => "Anthropic",
+                            "openai" => "OpenAI",
+                            _ => unreachable!(),
+                        };
+
+                        print!("  Enter your {} API key: ", provider_label);
+                        io::stdout().flush()?;
+                        let mut key = String::new();
+                        io::stdin().read_line(&mut key)?;
+                        let key = key.trim().to_string();
+                        if key.is_empty() {
+                            println!("  \x1b[1;31m✗\x1b[0m API key cannot be empty.");
+                            continue;
+                        }
+
+                        println!(
+                            "\n  \x1b[1;32m✓\x1b[0m Selected: \x1b[1m{}\x1b[0m ({})\n",
+                            model_name, provider_label
+                        );
+
+                        // Re-exec claw with the API key in the environment
+                        let exe = env::current_exe()?;
+                        let status = Command::new(exe)
+                            .arg("--model")
+                            .arg(model_name)
+                            .env(env_var_name, &key)
+                            .status()?;
+                        std::process::exit(status.code().unwrap_or(0));
+                    }
+                }
+            }
+        }
+        println!("  \x1b[1;31m✗\x1b[0m Invalid choice. Please enter a number between 1 and {}.", options.len());
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,6 +296,7 @@ enum CliAction {
         model: String,
         allowed_tools: Option<AllowedToolSet>,
         permission_mode: PermissionMode,
+        model_explicitly_set: bool,
     },
     // prompt-mode formatting is only supported for non-interactive runs
     Help,
@@ -173,6 +324,7 @@ impl CliOutputFormat {
 fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let mut model = std::env::var("CLAW_DEFAULT_MODEL")
         .unwrap_or_else(|_| DEFAULT_MODEL.to_string());
+    let model_explicitly_set = std::env::var("CLAW_DEFAULT_MODEL").is_ok();
     let mut output_format = CliOutputFormat::Text;
     let mut permission_mode = default_permission_mode();
     let mut wants_version = false;
@@ -191,6 +343,7 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
                     .get(index + 1)
                     .ok_or_else(|| "missing value for --model".to_string())?;
                 model = resolve_model_alias(value).to_string();
+                // model_explicitly_set is shadowed below for Repl
                 index += 2;
             }
             flag if flag.starts_with("--model=") => {
@@ -271,10 +424,13 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
     let allowed_tools = normalize_allowed_tools(&allowed_tool_values)?;
 
     if rest.is_empty() {
+        // Check if --model was passed by comparing to the default
+        let was_model_arg_used = args.iter().any(|a| a == "--model" || a.starts_with("--model="));
         return Ok(CliAction::Repl {
             model,
             allowed_tools,
             permission_mode,
+            model_explicitly_set: model_explicitly_set || was_model_arg_used,
         });
     }
     if matches!(rest.first().map(String::as_str), Some("--help" | "-h")) {
