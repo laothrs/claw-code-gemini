@@ -24,6 +24,7 @@ pub enum ProviderClient {
     Xai(OpenAiCompatClient),
     OpenAi(OpenAiCompatClient),
     Gemini(OpenAiCompatClient),
+    Ollama(OpenAiCompatClient),
 }
 
 impl ProviderClient {
@@ -50,6 +51,9 @@ impl ProviderClient {
             ProviderKind::Gemini => Ok(Self::Gemini(OpenAiCompatClient::from_env(
                 OpenAiCompatConfig::gemini(),
             )?)),
+            ProviderKind::Ollama => Ok(Self::Ollama(OpenAiCompatClient::from_env(
+                OpenAiCompatConfig::ollama(),
+            )?)),
         }
     }
 
@@ -60,6 +64,7 @@ impl ProviderClient {
             Self::Xai(_) => ProviderKind::Xai,
             Self::OpenAi(_) => ProviderKind::OpenAi,
             Self::Gemini(_) => ProviderKind::Gemini,
+            Self::Ollama(_) => ProviderKind::Ollama,
         }
     }
 
@@ -69,7 +74,9 @@ impl ProviderClient {
     ) -> Result<MessageResponse, ApiError> {
         match self {
             Self::ClawApi(client) => send_via_provider(client, request).await,
-            Self::Xai(client) | Self::OpenAi(client) | Self::Gemini(client) => send_via_provider(client, request).await,
+            Self::Xai(client) | Self::OpenAi(client) | Self::Gemini(client) | Self::Ollama(client) => {
+                send_via_provider(client, request).await
+            }
         }
     }
 
@@ -81,9 +88,11 @@ impl ProviderClient {
             Self::ClawApi(client) => stream_via_provider(client, request)
                 .await
                 .map(MessageStream::ClawApi),
-            Self::Xai(client) | Self::OpenAi(client) | Self::Gemini(client) => stream_via_provider(client, request)
-                .await
-                .map(MessageStream::OpenAiCompat),
+            Self::Xai(client) | Self::OpenAi(client) | Self::Gemini(client) | Self::Ollama(client) => {
+                stream_via_provider(client, request)
+                    .await
+                    .map(MessageStream::OpenAiCompat)
+            }
         }
     }
 }
@@ -127,6 +136,11 @@ pub fn read_xai_base_url() -> String {
 #[must_use]
 pub fn read_gemini_base_url() -> String {
     openai_compat::read_base_url(OpenAiCompatConfig::gemini())
+}
+
+#[must_use]
+pub fn read_ollama_base_url() -> String {
+    openai_compat::read_base_url(OpenAiCompatConfig::ollama())
 }
 
 #[cfg(test)]

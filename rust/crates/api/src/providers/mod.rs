@@ -29,6 +29,7 @@ pub enum ProviderKind {
     Xai,
     OpenAi,
     Gemini,
+    Ollama,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -193,6 +194,24 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
             default_base_url: openai_compat::DEFAULT_GEMINI_BASE_URL,
         },
     ),
+    (
+        "llama3.1",
+        ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_OLLAMA_BASE_URL,
+        },
+    ),
+    (
+        "codestral",
+        ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_OLLAMA_BASE_URL,
+        },
+    ),
 ];
 
 #[must_use]
@@ -219,7 +238,7 @@ pub fn resolve_model_alias(model: &str) -> String {
                     "gemini" => "gemini-2.5-flash",
                     _ => trimmed,
                 },
-                ProviderKind::OpenAi => trimmed,
+                ProviderKind::Ollama | ProviderKind::OpenAi => trimmed,
             })
         })
         .map_or_else(|| trimmed.to_string(), ToOwned::to_owned)
@@ -246,6 +265,14 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             auth_env: "GEMINI_API_KEY",
             base_url_env: "GEMINI_BASE_URL",
             default_base_url: openai_compat::DEFAULT_GEMINI_BASE_URL,
+        });
+    }
+    if lower.contains("llama") || lower.contains("codestral") {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: openai_compat::DEFAULT_OLLAMA_BASE_URL,
         });
     }
     None
