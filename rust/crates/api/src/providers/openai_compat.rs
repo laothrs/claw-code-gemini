@@ -112,11 +112,18 @@ impl OpenAiCompatClient {
     }
 
     pub fn from_env(config: OpenAiCompatConfig) -> Result<Self, ApiError> {
-        let Some(api_key) = read_env_non_empty(config.api_key_env)? else {
-            return Err(ApiError::missing_credentials(
-                config.provider_name,
-                config.credential_env_vars(),
-            ));
+        let api_key = match read_env_non_empty(config.api_key_env)? {
+            Some(key) => key,
+            None => {
+                if config.provider_name == "Ollama" {
+                    String::new()
+                } else {
+                    return Err(ApiError::missing_credentials(
+                        config.provider_name,
+                        config.credential_env_vars(),
+                    ));
+                }
+            }
         };
         Ok(Self::new(api_key, config))
     }
