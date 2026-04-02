@@ -11,10 +11,10 @@ use api::{
 use plugins::PluginTool;
 use reqwest::blocking::Client;
 use runtime::{
-    edit_file, execute_bash, glob_search, grep_search, load_system_prompt, read_file, write_file,
-    ApiClient, ApiRequest, AssistantEvent, BashCommandInput, ContentBlock, ConversationMessage,
-    ConversationRuntime, GrepSearchInput, MessageRole, PermissionMode, PermissionPolicy,
-    RuntimeError, Session, TokenUsage, ToolError, ToolExecutor,
+    create_directory, edit_file, execute_bash, glob_search, grep_search, load_system_prompt,
+    read_file, write_file, ApiClient, ApiRequest, AssistantEvent, BashCommandInput, ContentBlock,
+    ConversationMessage, ConversationRuntime, GrepSearchInput, MessageRole, PermissionMode,
+    PermissionPolicy, RuntimeError, Session, TokenUsage, ToolError, ToolExecutor,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -231,6 +231,20 @@ pub fn mvp_tool_specs() -> Vec<ToolSpec> {
                 "additionalProperties": false
             }),
             required_permission: PermissionMode::DangerFullAccess,
+        },
+        ToolSpec {
+            name: "mkdir",
+            description: "Create a new directory in the workspace.",
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" },
+                    "description": { "type": "string" }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            }),
+            required_permission: PermissionMode::WorkspaceWrite,
         },
         ToolSpec {
             name: "read_file",
@@ -539,6 +553,7 @@ pub fn mvp_tool_specs() -> Vec<ToolSpec> {
 pub fn execute_tool(name: &str, input: &Value) -> Result<String, String> {
     match name {
         "bash" => from_value::<BashCommandInput>(input).and_then(run_bash),
+        "mkdir" => from_value::<MkdirInput>(input).and_then(run_mkdir),
         "read_file" => from_value::<ReadFileInput>(input).and_then(run_read_file),
         "write_file" => from_value::<WriteFileInput>(input).and_then(run_write_file),
         "edit_file" => from_value::<EditFileInput>(input).and_then(run_edit_file),
@@ -570,6 +585,10 @@ fn from_value<T: for<'de> Deserialize<'de>>(input: &Value) -> Result<T, String> 
 fn run_bash(input: BashCommandInput) -> Result<String, String> {
     serde_json::to_string_pretty(&execute_bash(input).map_err(|error| error.to_string())?)
         .map_err(|error| error.to_string())
+}
+
+fn run_mkdir(input: MkdirInput) -> Result<String, String> {
+    to_pretty_json(create_directory(&input.path).map_err(io_to_string)?)
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -666,6 +685,11 @@ fn to_pretty_json<T: serde::Serialize>(value: T) -> Result<String, String> {
 #[allow(clippy::needless_pass_by_value)]
 fn io_to_string(error: std::io::Error) -> String {
     error.to_string()
+}
+
+#[derive(Debug, Deserialize)]
+struct MkdirInput {
+    path: String,
 }
 
 #[derive(Debug, Deserialize)]

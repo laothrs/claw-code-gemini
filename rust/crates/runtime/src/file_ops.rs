@@ -129,6 +129,24 @@ pub struct GrepSearchOutput {
     pub applied_offset: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CreateDirectoryOutput {
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(rename = "path")]
+    pub path: String,
+}
+
+pub fn create_directory(path: &str) -> io::Result<CreateDirectoryOutput> {
+    let absolute_path = normalize_path_allow_missing(path)?;
+    fs::create_dir_all(&absolute_path)?;
+
+    Ok(CreateDirectoryOutput {
+        kind: String::from("create"),
+        path: absolute_path.to_string_lossy().into_owned(),
+    })
+}
+
 pub fn read_file(
     path: &str,
     offset: Option<usize>,
