@@ -112,7 +112,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let final_model = if model_explicitly_set {
                 model
             } else {
-                interactive_model_selection()?
+                let selected = interactive_model_selection()?;
+                api::resolve_model_alias(&selected).to_string()
             };
             run_repl(final_model, allowed_tools, permission_mode)?;
         }
@@ -3227,10 +3228,13 @@ impl DefaultRuntimeClient {
                 _ => ProviderClient::from_model(&model)?,
             }
         };
+        // Strip provider prefixes (e.g. "ollama/") so the clean model
+        // name is sent in API requests.
+        let resolved_model = api::resolve_model_alias(&model).to_string();
         Ok(Self {
             runtime: tokio::runtime::Runtime::new()?,
             client,
-            model,
+            model: resolved_model,
             enable_tools,
             emit_output,
             allowed_tools,
